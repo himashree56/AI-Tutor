@@ -6,6 +6,7 @@ An advanced Retrieval-Augmented Generation (RAG) backend designed for students. 
 
 - **Grounded Chat:** Answers are extracted strictly from provided documents with verbatim citations.
 - **AI Quiz Generator:** Automatically creates multiple-choice questions with evidence-based reasoning.
+- **Source Filtering:** Select specific documents for targeted quiz generation or chat context.
 - **Cloud Vector Search:** Powered by **Pinecone** for high-speed, scaleable semantic retrieval.
 - **Universal LLM Support:** Integrated with **OpenRouter** to use state-of-the-art models like nemotron and gpt-4o.
 - **Real-time Streaming:** Token-by-token response streaming for a smooth user experience.
@@ -21,13 +22,13 @@ An advanced Retrieval-Augmented Generation (RAG) backend designed for students. 
 ## 📂 Project Structure
 
 ```text
-AI-tutor/
+AI-Tutor/
 ├── backend/            # FastAPI Backend
 │   ├── app/            # Core Application Logic
 │   ├── tests/          # Unit & E2E Tests
 │   ├── logs/           # Application Logs
 │   └── requirements.txt
-├── BEE654B-module-5-pdf.pdf  # Sample Document
+├── app.py              # Streamlit Frontend (if applicable)
 └── README.md
 ```
 
@@ -37,23 +38,26 @@ AI-tutor/
    ```bash
    cd backend
    python -m venv venv
-   source venv/bin/activate  # windows: .\venv\Scripts\activate
+   .\venv\Scripts\activate  # Windows
+   # source venv/bin/activate  # macOS/Linux
    pip install -r requirements.txt
    ```
 
 2. **Configure Environment:**
-   Update `.env` with your `OPENROUTER_API_KEY` and `PINECONE_API_KEY`.
+   Update `backend/.env` with your `OPENROUTER_API_KEY`, `PINECONE_API_KEY`, and `PINECONE_INDEX_NAME`.
 
 3. **Run Server:**
    ```bash
-   python -m uvicorn app.main:app --port 8001 --reload
+   cd backend
+   python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
    ```
 
-4. **Test:**
+4. **Verify:**
    ```bash
+   cd backend
    python test_tutor.py
    ```
 
 ---
 > [!IMPORTANT]
-> **Pinecone Setup:** Ensure your Pinecone index is set to **1536 dimensions** to match the OpenAI embedding standard used in this project.
+> **Pinecone Setup:** Ensure your Pinecone index is set to **1536 dimensions** with **Cosine** metric to match the OpenAI embedding standard used in this project.

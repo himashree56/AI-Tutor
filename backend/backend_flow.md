@@ -19,16 +19,16 @@ graph TD
 
 ---
 
-## 💬 RAG Chat Flow (Query -> Answer)
+## 💬 RAG Chat Flow (JSON -> Answer)
 
 This flow explains the Retrieval-Augmented Generation (RAG) process used to answer user questions using only document context.
 
 ```mermaid
 graph TD
-    A[User Query] --> B[Embeddings Service]
+    A[JSON Chat Request] --> B[Embeddings Service]
     B -->|Generate Query Vector| C[Pinecone Query]
     C -->|Top-K Chunks| D[Retriever Service]
-    D --> E[Reranker Model]
+    D --> E[Local Reranker]
     E -->|Scored Relevance| F[Grounded Context]
     F --> G[Prompt Builder]
     G -->|Strict System Instructions| H[LLM (OpenRouter)]
@@ -37,24 +37,28 @@ graph TD
 
 ---
 
-## 📝 Quiz Generation Flow (Topic -> JSON Quiz)
+## 📝 Quiz Generation Flow (JSON -> JSON Quiz)
 
 The flow for creating grounded, educational assessments.
 
 ```mermaid
 graph TD
-    A[Quiz Topic] --> B[Pinecone Semantic Search]
-    B --> C[Topic Context Chunks]
-    C --> D[Strict Quiz Prompt]
-    D -->|Evidence-Based Quoting| E[LLM (OpenRouter)]
-    E --> F[Pydantic Schema Validation]
-    F --> G[JSON Quiz with Citations]
-    G --> H[User Test]
+    A[JSON Quiz Request] --> B{Topic or Context?}
+    B -->|Topic| C[Pinecone Semantic Search]
+    B -->|Context| D[Direct Context]
+    C --> E[Topic Context Chunks]
+    E --> F[Strict Quiz Prompt]
+    D --> F
+    F -->|Evidence-Based Quoting| G[LLM (OpenRouter)]
+    G --> H[Pydantic Schema Validation]
+    H --> I[JSON Quiz with Citations]
 ```
 
 ---
 
 ### Core Grounding Principles:
-1. **Verbatim Evidence:** For every quiz question, the AI must provide a direct quote from the source PDF.
-2. **Refusal Logic:** If the Pinecone search returns no relevant chunks for a topic, the system automatically refuses to generate a quiz, preventing hallucinations.
-3. **Citations:** Every chat answer includes `[Source X]` tags mapping to specific page numbers.
+
+1. **Schema Synchronization:** Both backend and frontend agree on exact JSON structures for chat and quizzes, preventing 422 errors.
+2. **Verbatim Evidence:** For every quiz question, the AI must provide a direct quote from the source PDF.
+3. **Refusal Logic:** If the Pinecone search returns no relevant chunks for a topic, the system automatically refuses to generate a quiz, preventing hallucinations.
+4. **Citations:** Every chat answer includes `[Source X]` tags mapping to specific page numbers and document names.

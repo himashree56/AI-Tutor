@@ -12,10 +12,10 @@ This guide provides step-by-step instructions for installing and running the AI 
 
 1. **Clone & Navigate:**
    ```bash
-   cd backend
+   cd AI-Tutor/backend
    ```
 
-2. **Wait! Virtual Environment Setup:**
+2. **Virtual Environment Setup:**
    ```bash
    python -m venv venv
    .\venv\Scripts\activate  # Windows
@@ -29,7 +29,7 @@ This guide provides step-by-step instructions for installing and running the AI 
 
 ## ⚙️ Configuration
 
-Update the `.env` file in the `backend/` folder with your credentials.
+Create a `.env` file in the `backend/` folder and update it with your credentials.
 
 | Variable | Description | Example |
 | :--- | :--- | :--- |
@@ -42,23 +42,27 @@ Update the `.env` file in the `backend/` folder with your credentials.
 > **Pinecone Index Configuration:**
 > - **Dimension:** 1536
 > - **Metric:** Cosine
-> - **Model:** `openai/text-embedding-3-small` (via OpenRouter)
+> - **Serverless Spec:** `aws-us-east-1` (or your preferred region)
 
 ## 🎯 Running the System
 
 ### 1. Start the FastAPI Server
 ```bash
+# From the backend directory
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
 ```
 
 ### 2. Verify with CLI Test Tool
+Ensure the server is running, then in a new terminal:
 ```bash
+cd backend
 python test_tutor.py
 ```
 
 ### 3. Upload a Document
 Use the `test_ingest.py` script to upload your first PDF:
 ```bash
+cd backend
 python test_ingest.py
 ```
 *(This will process and upsert your document to Pinecone)*
