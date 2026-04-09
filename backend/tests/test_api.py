@@ -26,7 +26,7 @@ def test_health_endpoint(client):
 
 
 def test_chat_without_query(client):
-    response = client.post("/chat/?query=&session_id=test123")
+    response = client.post("/chat/", json={"query": "", "session_id": "test123"})
     assert response.status_code == 400
 
 
@@ -43,7 +43,7 @@ def test_clear_history(client):
 
 
 def test_quiz_without_topic_or_context(client):
-    response = client.post("/quiz/", json={})
+    response = client.post("/generate-quiz/", json={})
     assert response.status_code == 400
 
 

@@ -1,7 +1,7 @@
 from typing import Optional
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Body
 from fastapi.responses import StreamingResponse
 
 from app.services.chat_service import chat_service
@@ -22,7 +22,7 @@ class ChatRequest(BaseModel):
 
 
 @router.post("/")
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest = Body(...)):
     query = request.query
     session_id = request.session_id
     top_k = request.top_k
@@ -70,7 +70,7 @@ async def chat(request: ChatRequest):
 
 
 @router.post("/stream")
-async def stream_chat(request: ChatRequest):
+async def stream_chat(request: ChatRequest = Body(...)):
     query = request.query
     session_id = request.session_id
     top_k = request.top_k

@@ -650,18 +650,20 @@ BACKEND_URL = "http://localhost:8000"
 
 def call_backend_api(user_input: str) -> dict:
     """
-    Send user input to the backend /chat/ endpoint and return the response.
-    Endpoint: POST {BACKEND_URL}/chat/?query=...&session_id=...
+    Send user input to the backend /chat/ endpoint.
+    Endpoint: POST {BACKEND_URL}/chat/
     """
     url = f"{BACKEND_URL}/chat/"
     try:
         response = requests.post(
             url,
-            params={
+            json={
                 "query": user_input,
                 "session_id": "user1",
+                "top_k": None,
+                "use_reranker": True
             },
-            timeout=30,
+            timeout=120,
         )
         response.raise_for_status()
         return {"status": "success", "data": response.json()}
@@ -682,19 +684,20 @@ def call_backend_api(user_input: str) -> dict:
 
 def ask_ai(question: str, session_id: str = "user1") -> dict:
     """
-    Send a chat query to the backend /chat/ endpoint.
-    Uses query-params instead of JSON body.
-    Endpoint: POST {BACKEND_URL}/chat/?query=...&session_id=...
+    Send a chat query to the backend /chat/ endpoint using JSON body.
+    Endpoint: POST {BACKEND_URL}/chat/
     """
     url = f"{BACKEND_URL}/chat/"
     try:
         response = requests.post(
             url,
-            params={
+            json={
                 "query": question,
                 "session_id": session_id,
+                "top_k": None,
+                "use_reranker": True
             },
-            timeout=30,
+            timeout=120,
         )
         response.raise_for_status()
         return {"status": "success", "data": response.json()}
@@ -713,7 +716,7 @@ def upload_file_to_backend(file) -> dict:
     endpoint = f"{BACKEND_URL}/ingest/upload"
     try:
         files = {"file": (file.name, file.getvalue(), file.type)}
-        response = requests.post(endpoint, files=files, timeout=60)
+        response = requests.post(endpoint, files=files, timeout=180)
         response.raise_for_status()
         return {"status": "success", "data": response.json()}
     except requests.exceptions.ConnectionError:
@@ -730,8 +733,8 @@ def ingest_text_to_backend(text_content: str, source_name: str = "pasted_text") 
     try:
         response = requests.post(
             endpoint,
-            json={"text": text_content, "source": source_name},
-            timeout=60,
+            json={"text": text_content, "source_name": source_name},
+            timeout=180,
         )
         response.raise_for_status()
         return {"status": "success", "data": response.json()}
@@ -752,7 +755,7 @@ def generate_quiz(topic: str = "", context: str = "") -> dict:
             payload["topic"] = topic
         if context:
             payload["context"] = context
-        response = requests.post(endpoint, json=payload, timeout=30)
+        response = requests.post(endpoint, json=payload, timeout=120)
         response.raise_for_status()
         return {"status": "success", "data": response.json()}
     except requests.exceptions.ConnectionError:
@@ -972,7 +975,7 @@ def page_home():
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     section("⚡ Quick Query")
-    quick_q = st.text_input("", placeholder="Ask a quick question to the AI…", key="home_quick_q", label_visibility="collapsed")
+    quick_q = st.text_input("Quick Query", placeholder="Ask a quick question to the AI…", key="home_quick_q", label_visibility="collapsed")
     if st.button("Send Query →", key="home_send"):
         if quick_q.strip():
             with st.spinner(""):
@@ -1057,7 +1060,7 @@ def page_upload():
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
         section("✍️ Paste Text Content")
         text_content = st.text_area(
-            "",
+            "Study Material",
             placeholder="Paste lecture notes, textbook excerpts, or any study material here…",
             height=180,
             key="paste_text",
@@ -1157,7 +1160,7 @@ def page_chat():
     inp_col, btn_col, clr_col = st.columns([8, 1.5, 1.5])
     with inp_col:
         user_msg = st.text_input(
-            "",
+            "Chat Message",
             placeholder="Ask your AI Tutor anything…",
             key="chat_input",
             label_visibility="collapsed",

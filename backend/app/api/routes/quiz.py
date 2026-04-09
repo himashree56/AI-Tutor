@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Body
 from pydantic import BaseModel
 
 from app.services.quiz_service import quiz_service
@@ -34,7 +34,7 @@ class QuizResponse(BaseModel):
 
 
 @router.post("/", response_model=QuizResponse)
-async def generate_quiz(request: QuizRequest):
+async def generate_quiz(request: QuizRequest = Body(...)):
     if not request.topic and not request.context:
         raise HTTPException(
             status_code=400,
@@ -71,7 +71,7 @@ async def generate_quiz(request: QuizRequest):
 
 
 @router.post("/submit", response_model=QuizSubmitResponse)
-async def submit_quiz_answer(request: QuizSubmitRequest):
+async def submit_quiz_answer(request: QuizSubmitRequest = Body(...)):
     is_correct = request.provided_answer.strip().upper() == request.correct_answer.strip().upper()
     
     if is_correct:
