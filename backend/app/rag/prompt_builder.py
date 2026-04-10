@@ -28,22 +28,24 @@ Your Answer (cite sources as [Source X]):"""
 
 RULES:
 1. Generate exactly {num_questions} questions about "{topic}".
-2. STRICT TOPIC ADHERENCE: All questions must relate to "{topic}". Do not ask about other concepts in the context (like general location potential, or unrelated parameters) unless they explain or involve "{topic}".
+2. STRICT TOPIC ADHERENCE: All questions must relate to "{topic}". Do not ask about other concepts in the context unless they explain or involve "{topic}".
 3. Each question MUST have exactly 4 options (A, B, C, D)
-4. FORBIDDEN: Do not generate questions about the "process of learning", "how to write a summary", or "general concepts". 
+4. FORBIDDEN: Do not include markers like `*` or `✓` in the options. The correct answer must ONLY be specified in the `answer` field.
 5. GROUNDEDNESS: For EACH question, you MUST provide the `evidence_quote` which is a verbatim sentence from the provided context below.
-6. If the context is insufficient or empty for the topic "{topic}", do not guess. 
+6. STRICT ANSWER FORMAT: The `answer` field MUST be exactly ONE uppercase letter (A, B, C, or D). Do not include the option text in the answer field.
 
 CONTEXT:
 {context}
 
 OUTPUT FORMAT (JSON only):
+STRICT RULE: Return ONLY the JSON object. Do not include any preamble, introduction, or concluding text. Do not include markdown code blocks. Start your response with {{ and end with }}.
+
 {{
     "questions": [
         {{
             "question": "Question about {topic} based ONLY on the context?",
-            "options": ["A. Option A", "B. Option B", "C. Option C", "D. Option D"],
-            "answer": "A",
+            "options": ["A. Option text", "B. Option text", "C. Option text", "D. Option text"],
+            "answer": "B",
             "evidence_quote": "Verbatim sentence from the context here.",
             "hint": "A helpful hint based on the evidence."
         }}

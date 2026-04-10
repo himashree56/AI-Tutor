@@ -19,6 +19,7 @@ class EmbeddingsService:
         # Cache
         self._model: Optional[SentenceTransformer] = None
         self._pinecone: Optional[Pinecone] = None
+        self._index: Optional[Any] = None
 
     # ─── Embedding models ────────────────────────────────────────────────────
 
@@ -79,12 +80,29 @@ class EmbeddingsService:
 
     @property
     def pinecone_index(self):
-        if self._pinecone is None:
-            logger.info("Connecting to Pinecone...")
-            if not settings.pinecone_api_key or settings.pinecone_api_key == "your_pinecone_api_key":
-                logger.error("PINECONE_API_KEY is not set or invalid!")
-            self._pinecone = Pinecone(api_key=settings.pinecone_api_key)
-        return self._pinecone.Index(settings.pinecone_index_name)
+        if self._index is None:
+            if self._pinecone is None:
+                logger.info("Connecting to Pinecone...")
+                if not settings.pinecone_api_key or settings.pinecone_api_key == "your_pinecone_api_key":
+                    logger.error("PINECONE_API_KEY is not set or invalid!")
+                self._pinecone = Pinecone(api_key=settings.pinecone_api_key)
+            
+            logger.info(f"Initializing Pinecone index: {settings.pinecone_index_name}")
+            self._index = self._pinecone.Index(settings.pinecone_index_name)
+        return self._index
+
+    def initialize(self):
+        """Pre-load models and connections to avoid latency on first request."""
+        logger.info("Pre-warming EmbeddingsService...")
+        # Trigger model load
+        _ = self.local_model
+        try:
+            # Trigger pinecone connection
+            _ = self.pinecone_index
+            logger.info("EmbeddingsService pinecone initialization complete.")
+        except Exception as e:
+            logger.error(f"Could not connect to Pinecone during initialization: {e}")
+        logger.info("EmbeddingsService initialization complete.")
 
     # ─── CRUD operations ──────────────────────────────────────────────────────
 

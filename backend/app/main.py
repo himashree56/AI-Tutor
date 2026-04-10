@@ -9,12 +9,19 @@ from app.utils.logger import logger
 from app.api.routes import ingest, chat, quiz
 
 
+from app.rag.embeddings import embeddings_service
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting AI Tutor Backend...")
     logger.info(f"LLM Provider: {settings.llm_provider}")
     active_model = settings.openrouter_model if settings.llm_provider == "openrouter" else settings.ollama_model
     logger.info(f"Active Model: {active_model}")
+    
+    # Pre-load embedding models and connections in the background
+    # so we don't block the server from accepting connections on port 8000
+    asyncio.create_task(asyncio.to_thread(embeddings_service.initialize))
     
     yield
     

@@ -77,11 +77,26 @@ class QuizService:
             temperature=settings.quiz_temperature
         )
         
+        if not response or response.strip() == "":
+            logger.error("LLM returned an empty response for quiz generation")
+            return QuizResult(
+                questions=[QuizQuestion(
+                    question="The AI could not generate questions at this time. Please try again.",
+                    options=[],
+                    answer="",
+                    hint="This might be due to a temporary API issue."
+                )],
+                topic=topic or "General",
+                num_generated=0
+            )
+
         questions = self._parse_quiz_response(response)
         
-        if len(questions) < num_q:
+        if len(questions) == 0:
+            logger.error(f"Failed to generate ANY questions for topic '{topic}'. Raw LLM response: {response[:1000]}")
+        elif len(questions) < num_q:
             logger.warning(
-                f"Generated {len(questions)} questions, expected {num_q}"
+                f"Generated only {len(questions)} questions, expected {num_q}"
             )
         
         return QuizResult(
@@ -114,43 +129,71 @@ class QuizService:
         questions = []
         
         try:
+            # 1. Clean response (remove markdown code blocks if present)
+            clean_response = response.strip()
+            if clean_response.startswith("```"):
+                # Find the first { after the start
+                start_json = clean_response.find("{")
+                end_json = clean_response.rfind("}")
+                if start_json != -1 and end_json != -1:
+                    clean_response = clean_response[start_json:end_json+1]
+            
+            # 2. Try primary regex search for "questions" block
             json_match = re.search(
                 r'\{[\s\S]*"questions"[\s\S]*\}',
-                response
+                clean_response
             )
             
             if json_match:
                 json_str = json_match.group()
-                # Clean up common LLM mistake: trailing commas
-                json_str = re.sub(r',\s*([\]\}])', r'\1', json_str)
-                
+            else:
+                # 3. Fallback: find first { and last }
+                start_idx = clean_response.find("{")
+                end_idx = clean_response.rfind("}")
+                if start_idx != -1 and end_idx != -1:
+                    json_str = clean_response[start_idx:end_idx+1]
+                else:
+                    json_str = "{}" # Force fallback to markdown parser
+            
+            # Clean up common LLM mistake: trailing commas
+            json_str = re.sub(r',\s*([\]\}])', r'\1', json_str)
+            
+            try:
                 data = json.loads(json_str)
                 
                 for q in data.get("questions", []):
+                    # Robust answer extraction: check multiple keys and clean the value
+                    answer = (
+                        q.get("answer") or 
+                        q.get("correct_answer") or 
+                        q.get("correct") or 
+                        q.get("ans") or 
+                        ""
+                    )
+                    
+                    # Ensure answer is just a single uppercase letter (e.g. "A" instead of "A. Option A" or "A.")
+                    if isinstance(answer, str) and answer:
+                        answer_match = re.search(r'[A-D]', answer.upper())
+                        if answer_match:
+                            answer = answer_match.group()
+                    
+                    if not answer:
+                         logger.warning(f"Question missing answer: {q.get('question', 'Unknown')}. Full item: {q}")
+
                     questions.append(QuizQuestion(
                         question=q.get("question", ""),
                         options=q.get("options", []),
-                        answer=q.get("answer", ""),
+                        answer=str(answer),
                         evidence_quote=q.get("evidence_quote", ""),
                         hint=q.get("hint", "")
                     ))
-            else:
+            except json.JSONDecodeError:
+                # 4. Fallback to markdown parser if JSON is still malformed
+                logger.warning("JSON parsing failed, falling back to markdown parser")
                 questions = self._parse_markdown_quiz(response)
                 
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON parse error: {e}. Raw response: {response}")
-            # Check if this is a refusal message
-            if "I could not find enough information" in response or "not present in the document" in response.lower():
-                questions = [QuizQuestion(
-                    question=response.strip(),
-                    options=[],
-                    answer="",
-                    hint=""
-                )]
-            else:
-                questions = self._parse_markdown_quiz(response)
         except Exception as e:
-            logger.error(f"Quiz parsing error: {e}. Raw response: {response}")
+            logger.error(f"Quiz parsing error: {str(e)}. Raw response: {response[:500]}...")
         
         return questions
 

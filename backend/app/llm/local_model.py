@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import httpx
 import ollama
 import json
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from app.core.config import settings
 from app.utils.logger import logger
@@ -186,6 +187,13 @@ class OpenRouterLLM(BaseLLM):
         self.temperature = settings.ollama_temperature
         self.max_tokens = settings.ollama_max_tokens
 
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=2, max=30),
+        retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.ConnectError, httpx.TimeoutException)),
+        reraise=True,
+        before_sleep=lambda retry_state: logger.info(f"Retrying OpenRouter call... (attempt {retry_state.attempt_number})")
+    )
     async def generate(self, prompt: str, **kwargs) -> str:
         if not self.api_key or "your_openrouter_api_key_here" in self.api_key:
             raise ValueError("OpenRouter API key is missing. Please set OPENROUTER_API_KEY in .env")
@@ -213,11 +221,32 @@ class OpenRouterLLM(BaseLLM):
                 )
                 response.raise_for_status()
                 data = response.json()
-                return data["choices"][0]["message"]["content"]
+                
+                if not isinstance(data, dict):
+                    raise Exception(f"OpenRouter returned unexpected data type: {type(data)}. Response: {data}")
+
+                if "choices" in data and len(data["choices"]) > 0:
+                    choice = data["choices"][0]
+                    if "message" in choice and "content" in choice["message"]:
+                        return choice["message"]["content"]
+                    else:
+                        raise Exception(f"OpenRouter choice missing message content: {choice}")
+                elif "error" in data:
+                    error_msg = data["error"].get("message", str(data["error"]))
+                    raise Exception(f"OpenRouter API error: {error_msg}")
+                else:
+                    raise Exception(f"OpenRouter unexpected response format (missing 'choices'): {data}")
             except Exception as e:
-                logger.error(f"OpenRouter generation error: {e}")
+                logger.error(f"OpenRouter generation error: {str(e)}")
                 raise
 
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=2, max=30),
+        retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.ConnectError, httpx.TimeoutException)),
+        reraise=True,
+        before_sleep=lambda retry_state: logger.info(f"Retrying OpenRouter stream... (attempt {retry_state.attempt_number})")
+    )
     async def stream_generate(
         self,
         prompt: str,
@@ -256,13 +285,16 @@ class OpenRouterLLM(BaseLLM):
                                 break
                             try:
                                 data = json.loads(line[6:])
-                                content = data["choices"][0]["delta"].get("content", "")
-                                if content:
-                                    yield content
-                            except Exception:
+                                if isinstance(data, dict) and "choices" in data and len(data["choices"]) > 0:
+                                    delta = data["choices"][0].get("delta", {})
+                                    content = delta.get("content", "")
+                                    if content:
+                                        yield content
+                            except Exception as e:
+                                logger.debug(f"OpenRouter stream chunk parse error: {e}")
                                 continue
             except Exception as e:
-                logger.error(f"OpenRouter stream error: {e}")
+                logger.error(f"OpenRouter stream error: {str(e)}")
                 raise
 
 

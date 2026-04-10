@@ -623,7 +623,7 @@ def init_session():
         "last_response": None,
         "uploaded_files": [],
         "settings": {
-            "api_url": "http://localhost:8000",
+            "api_url": "http://localhost:8001",
             "model": "gpt-4o",
             "temperature": 0.7,
             "theme": "Dark",
@@ -635,6 +635,13 @@ def init_session():
             "files_uploaded": 0,
             "sessions": 1,
         },
+        "quiz_data": [],
+        "quiz_active": False,
+        "quiz_index": 0,
+        "quiz_score": 0,
+        "quiz_feedback": None,
+        "quiz_finished": False,
+        "quiz_topic": "",
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -646,7 +653,7 @@ init_session()
 # ─────────────────────────────────────────────────────────────────
 # API FUNCTIONS
 # ─────────────────────────────────────────────────────────────────
-BACKEND_URL = "http://localhost:8000"
+BACKEND_URL = "http://localhost:8001"
 
 def call_backend_api(user_input: str) -> dict:
     """
@@ -663,7 +670,7 @@ def call_backend_api(user_input: str) -> dict:
                 "top_k": None,
                 "use_reranker": True
             },
-            timeout=120,
+            timeout=180,
         )
         response.raise_for_status()
         return {"status": "success", "data": response.json()}
@@ -697,7 +704,7 @@ def ask_ai(question: str, session_id: str = "user1") -> dict:
                 "top_k": None,
                 "use_reranker": True
             },
-            timeout=120,
+            timeout=180,
         )
         response.raise_for_status()
         return {"status": "success", "data": response.json()}
@@ -716,7 +723,7 @@ def upload_file_to_backend(file) -> dict:
     endpoint = f"{BACKEND_URL}/ingest/upload"
     try:
         files = {"file": (file.name, file.getvalue(), file.type)}
-        response = requests.post(endpoint, files=files, timeout=180)
+        response = requests.post(endpoint, files=files, timeout=300)
         response.raise_for_status()
         return {"status": "success", "data": response.json()}
     except requests.exceptions.ConnectionError:
@@ -734,7 +741,7 @@ def ingest_text_to_backend(text_content: str, source_name: str = "pasted_text") 
         response = requests.post(
             endpoint,
             json={"text": text_content, "source_name": source_name},
-            timeout=180,
+            timeout=300,
         )
         response.raise_for_status()
         return {"status": "success", "data": response.json()}
@@ -746,16 +753,16 @@ def ingest_text_to_backend(text_content: str, source_name: str = "pasted_text") 
         return {"status": "error", "message": f"⚠️ Ingest failed: {str(e)}"}
 
 
-def generate_quiz(topic: str = "", context: str = "") -> dict:
+def generate_quiz(topic: str = "", context: str = "", num_questions: int = 5) -> dict:
     """Generate a quiz via POST /generate-quiz/."""
     endpoint = f"{BACKEND_URL}/generate-quiz/"
     try:
-        payload = {}
+        payload = {"num_questions": num_questions}
         if topic:
             payload["topic"] = topic
         if context:
             payload["context"] = context
-        response = requests.post(endpoint, json=payload, timeout=120)
+        response = requests.post(endpoint, json=payload, timeout=180)
         response.raise_for_status()
         return {"status": "success", "data": response.json()}
     except requests.exceptions.ConnectionError:
@@ -794,6 +801,7 @@ NAV_ITEMS = [
     ("🏠", "Home Dashboard"),
     ("📂", "Upload Data"),
     ("💬", "Chat Interface"),
+    ("📝", "Interactive Quiz"),
     ("📊", "Results"),
     ("⚙️", "Settings"),
 ]
@@ -1215,6 +1223,135 @@ def page_chat():
 
 
 # ─────────────────────────────────────────────────────────────────
+# PAGE 3.5 — INTERACTIVE QUIZ
+# ─────────────────────────────────────────────────────────────────
+
+def page_quiz():
+    page_header("📝 Interactive Quiz", "Test your knowledge based on your study materials.")
+
+    if not st.session_state.quiz_active and not st.session_state.quiz_finished:
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        section("🎯 Quiz Configuration")
+        topic = st.text_input("Quiz Topic", value=st.session_state.quiz_topic, placeholder="e.g. Vision Transformers, Newton's Laws...")
+        num_q = st.slider("Number of Questions", min_value=1, max_value=10, value=5)
+
+        if st.button("🚀 Generate Quiz", use_container_width=True):
+            if not topic.strip():
+                show_error("Please enter a topic first.")
+            else:
+                with st.spinner("Analyzing documents and crafting questions..."):
+                    result = generate_quiz(topic=topic, num_questions=num_q)
+                
+                if result["status"] == "success":
+                    questions = result["data"].get("questions", [])
+                    if questions and len(questions) > 0:
+                        # Check if it's the "No context found" dummy question
+                        if "could not find enough information" in questions[0].get("question", ""):
+                             show_error(questions[0]["question"])
+                        else:
+                            st.session_state.quiz_data = questions
+                            st.session_state.quiz_active = True
+                            st.session_state.quiz_index = 0
+                            st.session_state.quiz_score = 0
+                            st.session_state.quiz_feedback = None
+                            st.session_state.quiz_topic = topic
+                            st.rerun()
+                    else:
+                        show_error("Could not generate questions for this topic. Try something mentioned in your uploads.")
+                else:
+                    show_error(result["message"])
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    elif st.session_state.quiz_active:
+        q_idx = st.session_state.quiz_index
+        questions = st.session_state.quiz_data
+        total_q = len(questions)
+        q = questions[q_idx]
+
+        # Progress
+        progress_pct = (q_idx) / total_q
+        st.markdown(f'<div style="color:#94a3b8;font-size:12px;margin-bottom:5px;">Question {q_idx + 1} of {total_q}</div>', unsafe_allow_html=True)
+        st.progress(progress_pct)
+
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        st.markdown(f'<div style="font-size:18px;font-weight:700;color:#c4b5fd;margin-bottom:20px;">{q["question"]}</div>', unsafe_allow_html=True)
+
+        options = q.get("options", [])
+        selected = st.radio("Choose the correct answer:", options, key=f"q_{q_idx}", index=None)
+
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            if st.button("Submit Answer", use_container_width=True, disabled=st.session_state.quiz_feedback is not None):
+                if selected:
+                    selected_letter = selected[0] if selected else ""
+                    correct_letter = q["answer"]
+                    
+                    if selected_letter == correct_letter:
+                        st.session_state.quiz_feedback = {"type": "success", "msg": "Correct! Excellent work."}
+                        st.session_state.quiz_score += 1
+                    else:
+                        st.session_state.quiz_feedback = {"type": "error", "msg": f"Actually, the correct answer was {correct_letter}."}
+                    st.rerun()
+                else:
+                    st.warning("Please select an option first.")
+
+        if st.session_state.quiz_feedback:
+            if st.session_state.quiz_feedback["type"] == "success":
+                show_success(st.session_state.quiz_feedback["msg"])
+            else:
+                show_error(st.session_state.quiz_feedback["msg"])
+            
+            if q.get("hint"):
+                st.info(f"💡 {q['hint']}")
+
+            with col2:
+                if q_idx + 1 < total_q:
+                    if st.button("Next Question →", use_container_width=True):
+                        st.session_state.quiz_index += 1
+                        st.session_state.quiz_feedback = None
+                        st.rerun()
+                else:
+                    if st.button("Finish Quiz 🏁", use_container_width=True):
+                        st.session_state.quiz_active = False
+                        st.session_state.quiz_finished = True
+                        st.session_state.quiz_feedback = None
+                        st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    elif st.session_state.quiz_finished:
+        st.markdown('<div class="glass-card" style="text-align:center;padding:40px;">', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:60px;">🏆</div>', unsafe_allow_html=True)
+        st.markdown('<div class="page-title">Quiz Completed!</div>', unsafe_allow_html=True)
+        
+        score = st.session_state.quiz_score
+        total = len(st.session_state.quiz_data)
+        pct = (score / total) * 100 if total > 0 else 0
+        
+        st.markdown(f"""
+        <div style="margin:20px 0;">
+            <div style="font-size:48px;font-weight:800;color:#c4b5fd;">{score} / {total}</div>
+            <div style="font-size:18px;color:#94a3b8;">Your Score: {pct:.1f}%</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if pct >= 80:
+            show_success("Amazing! You have mastered this topic.")
+        elif pct >= 50:
+            show_info("Good job! A bit more review and you'll be an expert.")
+        else:
+            show_error("Keep studying! Try reviewing the documents again.")
+
+        if st.button("🔄 Restart Quiz", use_container_width=True):
+            st.session_state.quiz_finished = False
+            st.session_state.quiz_active = False
+            st.session_state.quiz_data = []
+            st.rerun()
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────
 # PAGE 4 — RESULTS VISUALIZATION
 # ─────────────────────────────────────────────────────────────────
 
@@ -1444,6 +1581,8 @@ elif page == "Upload Data":
     page_upload()
 elif page == "Chat Interface":
     page_chat()
+elif page == "Interactive Quiz":
+    page_quiz()
 elif page == "Results":
     page_results()
 elif page == "Settings":
