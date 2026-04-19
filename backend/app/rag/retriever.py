@@ -37,7 +37,7 @@ class RetrieverService:
         )
 
         if not raw_results:
-            logger.warning("No documents retrieved from MongoDB vector search")
+            logger.warning("No documents retrieved from Pinecone vector search")
             return []
 
         documents = [r["text"] for r in raw_results]

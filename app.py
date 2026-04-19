@@ -12,6 +12,8 @@ import streamlit as st
 import requests
 import time
 import json
+import re
+import markdown
 from datetime import datetime
 
 # ─────────────────────────────────────────────────────────────────
@@ -606,7 +608,97 @@ hr {
     padding: 20px 0 8px;
 }
 
+/* ── LaTeX and Code ── */
+.bot-bubble-inner code {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-family: 'Fira Code', 'Courier New', monospace;
+    font-size: 0.9em;
+    color: #f0abfc;
+}
+
+.bot-bubble-inner pre {
+    background: rgba(0, 0, 0, 0.45);
+    padding: 15px;
+    border-radius: 10px;
+    overflow-x: auto;
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    margin: 10px 0;
+    position: relative;
+}
+
+.bot-bubble-inner ul, .bot-bubble-inner ol {
+    margin-left: 20px;
+    margin-bottom: 10px;
+}
+
+.bot-bubble-inner blockquote {
+    border-left: 3px solid #8b5cf6;
+    padding-left: 15px;
+    color: #94a3b8;
+    font-style: italic;
+    margin: 10px 0;
+}
+
+.copy-btn {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: rgba(139, 92, 246, 0.3);
+    border: 1px solid rgba(139, 92, 246, 0.5);
+    color: #c4b5fd;
+    padding: 2px 8px;
+    font-size: 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.copy-btn:hover {
+    background: rgba(139, 92, 246, 0.6);
+    color: white;
+}
+
+.source-link {
+    color: #818cf8;
+    text-decoration: none;
+    font-weight: 600;
+    border-bottom: 1px dashed rgba(129, 140, 248, 0.4);
+    cursor: pointer;
+}
+
+.source-link:hover {
+    color: #c4b5fd;
+    border-bottom-style: solid;
+}
+
+.sources-footer {
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.source-item {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-bottom: 4px;
+}
+
 </style>
+
+<!-- MathJax & Clipboard -->
+<script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<script>
+function copyToClipboard(text, btn) {
+    navigator.clipboard.writeText(text).then(() => {
+        const originalText = btn.innerText;
+        btn.innerText = 'Copied!';
+        setTimeout(() => btn.innerText = originalText, 2000);
+    });
+}
+</script>
 """
 
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
@@ -791,6 +883,48 @@ def check_backend_health() -> bool:
         return r.status_code == 200
     except Exception:
         return False
+
+
+
+# ─────────────────────────────────────────────────────────────────
+# RESPONSE FORMATTER
+# ─────────────────────────────────────────────────────────────────
+def format_ai_response(text: str, sources: list = None) -> str:
+    """
+    Convert AI markdown response to enhanced HTML with MathJax, source links, and copy buttons.
+    """
+    # 1. Handle Citations [Source X] -> Clickable Links
+    # We'll use id-based anchors for clickable sources
+    text = re.sub(r'\[Source (\d+)\]', r' <a href="#source-\1" class="source-link">[Source \1]</a>', text)
+
+    # 2. Convert Markdown to HTML
+    # Use extensions for tables and fenced code blocks
+    html_content = markdown.markdown(text, extensions=['fenced_code', 'tables', 'sane_lists'])
+
+    # 3. Add Copy Buttons to Code Blocks
+    # Find <code class="language-..."> blocks and inject a button
+    def add_copy_button(match):
+        code_attr = match.group(1)
+        code_content = match.group(2)
+        # Escape for JS
+        safe_code = code_content.replace('`', '\\`').replace('$', '\\$')
+        return f'<div style="position:relative;"><button class="copy-btn" onclick="copyToClipboard(`{safe_code}`, this)">Copy</button><pre><code{code_attr}>{code_content}</code></pre></div>'
+    
+    html_content = re.sub(r'<pre><code(.*?)>([\s\S]*?)</code></pre>', add_copy_button, html_content)
+
+    # 4. Append Sources Section if provided
+    if sources:
+        sources_html = '<div class="sources-footer">'
+        sources_html += '<div style="font-size:13px;font-weight:700;color:#c4b5fd;margin-bottom:8px;">Sources:</div>'
+        for s in sources:
+            s_id = s.get('id', '?')
+            s_name = s.get('source', 'Unknown')
+            s_page = s.get('page', 'N/A')
+            sources_html += f'<div id="source-{s_id}" class="source-item">[{s_id}] {s_name} (Page {s_page})</div>'
+        sources_html += '</div>'
+        html_content += sources_html
+
+    return html_content
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -998,7 +1132,9 @@ def page_home():
                 result = call_backend_api(quick_q)
             if result["status"] == "success":
                 answer = result["data"].get("answer", result["data"].get("response", str(result["data"])))
-                st.markdown(f'<div class="response-card">🤖 {answer}</div>', unsafe_allow_html=True)
+                sources = result["data"].get("sources", [])
+                formatted_resp = format_ai_response(answer, sources)
+                st.markdown(f'<div class="response-card">{formatted_resp}</div>', unsafe_allow_html=True)
                 st.session_state.stats["queries_sent"] += 1
             else:
                 show_error(result["message"])
@@ -1155,7 +1291,7 @@ def page_chat():
                 st.markdown(f"""
                 <div class="bot-bubble">
                     <div class="bubble-avatar bot-avatar">🤖</div>
-                    <div class="bot-bubble-inner">{msg["content"]}</div>
+                    <div class="bot-bubble-inner">{format_ai_response(msg["content"], msg.get("sources"))}</div>
                 </div>""", unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1211,7 +1347,8 @@ def page_chat():
                 or data.get("reply")
                 or str(data)
             )
-            st.session_state.messages.append({"role": "assistant", "content": answer})
+            sources = data.get("sources", [])
+            st.session_state.messages.append({"role": "assistant", "content": answer, "sources": sources})
         else:
             # Graceful error — still shown inside chat so the user knows what happened
             st.session_state.messages.append({
@@ -1363,12 +1500,15 @@ def page_results():
     section("🔍 Latest API Response")
 
     if st.session_state.last_response:
-        st.markdown(f'<div class="response-card">{st.session_state.last_response}</div>', unsafe_allow_html=True)
+        # Assuming last_response might not have sources context if it was from a direct test
+        st.markdown(f'<div class="response-card">{format_ai_response(st.session_state.last_response)}</div>', unsafe_allow_html=True)
     elif st.session_state.messages:
         # Show last assistant message
         last_bot = [m for m in st.session_state.messages if m["role"] == "assistant"]
         if last_bot:
-            st.markdown(f'<div class="response-card">🤖 {last_bot[-1]["content"]}</div>', unsafe_allow_html=True)
+            msg = last_bot[-1]
+            formatted_resp = format_ai_response(msg["content"], msg.get("sources"))
+            st.markdown(f'<div class="response-card">{formatted_resp}</div>', unsafe_allow_html=True)
         else:
             show_info("No assistant responses yet. Start chatting!")
     else:

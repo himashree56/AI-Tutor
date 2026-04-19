@@ -7,6 +7,7 @@ from app.memory.session_memory import memory_service
 from app.utils.logger import logger
 from app.utils.pdf_processor import pdf_processor
 from app.utils.chunking import chunker
+from app.utils.bm25_manager import bm25_manager
 
 
 @dataclass
