@@ -155,7 +155,7 @@ Key settings in `backend/.env`:
 ---
 
 > [!IMPORTANT]
-> **Pinecone Index Setup:** Your Pinecone index **must** be configured with **1536 dimensions** and **Cosine** similarity metric. This matches the `openai/text-embedding-3-small` embedding dimension used by default.
+> **Pinecone Index Setup:** Your Pinecone index **must** be configured with **384 dimensions** and **Cosine** similarity metric. This matches the `openai/text-embedding-3-small` embedding dimension used by default.
 
 > [!TIP]
 > **Local Mode:** Set `EMBEDDING_PROVIDER=local` and `LLM_PROVIDER=ollama` to run the entire stack offline with no API keys required.
